@@ -2,6 +2,8 @@ package chromecast
 
 import (
 	"log"
+	"mime"
+	"path/filepath"
 	"time"
 
 	"github.com/i574789/ottermediator/config"
@@ -39,7 +41,14 @@ func scheduleRelaunch(d *Device, url string) {
 	}
 	d.relaunchTimer = time.AfterFunc(3*time.Second, func() {
 		log.Printf("[%s] keep-alive: relaunching %s", d.status.Name, url)
-		if err := d.Cast(url); err != nil {
+		// Use CastSite for web pages, Cast for media files
+		var err error
+		if mime.TypeByExtension(filepath.Ext(url)) == "" {
+			err = d.CastSite(url)
+		} else {
+			err = d.Cast(url)
+		}
+		if err != nil {
 			log.Printf("[%s] keep-alive relaunch failed: %v", d.status.Name, err)
 		}
 	})

@@ -47,10 +47,9 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 #empty-state .icon { font-size: 3rem; opacity: 0.3; }
 
 #grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 1rem;
-  padding: 1.25rem;
+  position: relative;
+  width: 100%;
+  min-height: calc(100vh - 52px);
 }
 
 .card {
@@ -58,10 +57,47 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
-  transition: opacity 0.4s, border-color 0.3s;
+  transition: opacity 0.4s, border-color 0.3s, box-shadow 0.2s;
+  position: absolute;
+  width: 340px;
+  user-select: none;
 }
 .card.idle, .card.disconnected { opacity: 0.5; }
 .card.playing { border-color: #2a3a2a; }
+
+/* Card overlay for blocking interaction during cast */
+.card-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  z-index: 10;
+  backdrop-filter: blur(2px);
+  background: rgba(0,0,0,0.6);
+  pointer-events: all;
+}
+.card-overlay .overlay-spinner {
+  width: 28px; height: 28px;
+  border: 3px solid #333;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+.card-overlay .overlay-msg {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.card-overlay.success { background: rgba(0,40,0,0.75); }
+.card-overlay.success .overlay-msg { color: var(--green); }
+.card-overlay.failure { background: rgba(40,0,0,0.75); }
+.card-overlay.failure .overlay-msg { color: var(--red); }
+.card-overlay .overlay-icon { font-size: 2rem; line-height: 1; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .card-inner { padding: 1rem; }
 
@@ -106,6 +142,39 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
   color: var(--subtext);
   font-size: 2.5rem;
   opacity: 0.2;
+}
+.artwork-site {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  gap: 0.5rem;
+  background: radial-gradient(ellipse at center, #1a2a1a 0%, #0a0a0a 100%);
+  animation: site-glow 3s ease-in-out infinite;
+}
+.artwork-site .site-globe { font-size: 2rem; opacity: 0.7; }
+.artwork-site .site-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--accent);
+  text-align: center;
+  padding: 0 1rem;
+  opacity: 0.9;
+  letter-spacing: 0.03em;
+}
+.artwork-site .site-live {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green);
+  opacity: 0.8;
+}
+@keyframes site-glow {
+  0%, 100% { background: radial-gradient(ellipse at center, #1a2a1a 0%, #0a0a0a 100%); }
+  50% { background: radial-gradient(ellipse at center, #1e2e1e 0%, #0d0d0d 100%); }
 }
 
 /* Media info */
@@ -262,6 +331,97 @@ input[type=range] {
 }
 .keepalive-badge.keepalive { background: #1a2a3a; color: var(--accent); }
 .keepalive-badge.force { background: #3a1a1a; color: var(--red); }
+
+/* Drag and drop */
+.card.dragging-free { box-shadow: 0 8px 32px rgba(0,0,0,0.6); opacity: 0.92; z-index: 1000; transition: none; }
+
+/* Maximize button */
+.maximize-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: rgba(0,0,0,0.5);
+  border: none;
+  color: var(--subtext);
+  width: 22px; height: 22px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.7rem;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.card:hover .maximize-btn { opacity: 1; }
+.maximize-btn:hover { color: var(--text); background: rgba(0,0,0,0.8); }
+
+/* Popover */
+#popover-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: rgba(0,0,0,0.6);
+}
+#popover-backdrop.open { display: flex; }
+#popover-bg {
+  position: absolute;
+  inset: -5%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(40px) brightness(0.3) saturate(1.4);
+}
+#popover {
+  background: rgba(20,20,20,0.72);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  width: min(900px, 92vw);
+  max-height: 94vh;
+  overflow-y: auto;
+  position: fixed;
+  z-index: 2001;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.8);
+  animation: pop-in 0.18s ease;
+  backdrop-filter: blur(4px);
+  cursor: default;
+  user-select: none;
+}
+#popover .artwork-wrap {
+  cursor: grab;
+}
+#popover .artwork-wrap:active {
+  cursor: grabbing;
+}
+@keyframes pop-in {
+  from { transform: scale(0.93); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+#popover .close-btn {
+  position: absolute;
+  top: 0.75rem; right: 0.75rem;
+  background: rgba(0,0,0,0.5);
+  border: none; color: var(--text);
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  cursor: pointer; font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 3;
+}
+#popover .close-btn:hover { background: rgba(255,255,255,0.1); }
+#popover .card-inner { padding: 1.25rem; }
+#popover .artwork-wrap { aspect-ratio: 16/9; margin-bottom: 1rem; }
+#popover .media-title { font-size: 1.2rem; margin-bottom: 4px; }
+#popover .media-subtitle { font-size: 0.9rem; margin-bottom: 0.75rem; }
+#popover .progress-bar { height: 6px; margin-bottom: 6px; }
+#popover .controls { gap: 0.6rem; margin-bottom: 0.8rem; }
+#popover .btn { font-size: 1.1rem; padding: 0.5rem 0.85rem; }
+#popover .volume-row { font-size: 1rem; margin-bottom: 0.8rem; }
+#popover .cast-row { margin-bottom: 0.6rem; }
+#popover .cast-input { font-size: 0.85rem; }
 </style>
 </head>
 <body>
@@ -269,6 +429,14 @@ input[type=range] {
   <h1>⊙ OtterMediator</h1>
   <span class="subtitle">Media Cockpit</span>
   <span id="ws-status" class="disconnected">Connecting…</span>
+</div>
+
+<div id="popover-backdrop" onclick="closePopover(event)">
+  <div id="popover-bg"></div>
+  <div id="popover">
+    <button class="close-btn" onclick="closePopover()">✕</button>
+    <div id="popover-content"></div>
+  </div>
 </div>
 
 <div id="empty-state">
@@ -284,7 +452,69 @@ input[type=range] {
 const devices = new Map(); // id → DeviceStatus
 const positionTimers = new Map(); // id → intervalId
 const volumeDebounce = new Map(); // id → timeoutId
+const castInFlight = new Set(); // id → cast request in progress
+const stopInFlight = new Set(); // id → stop request in progress
 let ws, reconnectDelay = 1000;
+
+// ── Card positioning ──────────────────────────────────────────────────────────
+const cardPositions = JSON.parse(localStorage.getItem('cardPositions') || '{}');
+const CARD_W = 340, CARD_GAP = 16, CARD_START = 16;
+
+function savePos(id, x, y) {
+  cardPositions[id] = {x, y};
+  localStorage.setItem('cardPositions', JSON.stringify(cardPositions));
+}
+
+function getPos(id) {
+  if (cardPositions[id]) return cardPositions[id];
+  // Auto-layout: place in a row
+  const ids = Object.keys(cardPositions);
+  const col = document.getElementById('grid').querySelectorAll('.card').length;
+  const cols = Math.max(1, Math.floor((window.innerWidth - CARD_START) / (CARD_W + CARD_GAP)));
+  const x = CARD_START + (col % cols) * (CARD_W + CARD_GAP);
+  const y = CARD_START + Math.floor(col / cols) * (500 + CARD_GAP);
+  return {x, y};
+}
+
+function applyPos(card, id) {
+  const {x, y} = getPos(id);
+  card.style.left = x + 'px';
+  card.style.top = y + 'px';
+}
+
+function initDrag(card) {
+  // Drag by the card-inner area but not inputs/buttons/selects/ranges
+  card.addEventListener('mousedown', e => {
+    if (['INPUT','BUTTON','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
+    if (e.target.closest('.card-overlay')) return;
+    e.preventDefault();
+
+    const id = card.id.replace('card-', '');
+    const startX = e.clientX - card.offsetLeft;
+    const startY = e.clientY - card.offsetTop;
+
+    card.classList.add('dragging-free');
+    card.style.zIndex = 1000;
+
+    const onMove = e => {
+      const x = Math.max(0, e.clientX - startX);
+      const y = Math.max(0, e.clientY - startY);
+      card.style.left = x + 'px';
+      card.style.top = y + 'px';
+    };
+    const onUp = e => {
+      card.classList.remove('dragging-free');
+      card.style.zIndex = '';
+      const x = Math.max(0, e.clientX - startX);
+      const y = Math.max(0, e.clientY - startY);
+      savePos(id, x, y);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 function connect() {
@@ -325,17 +555,18 @@ function updateEmptyState() {
 
 // ── Card rendering ────────────────────────────────────────────────────────────
 function upsertCard(d) {
+  if (castInFlight.has(d.id)) return; // don't stomp button state mid-cast
+  if (stopInFlight.has(d.id)) return; // don't stomp overlay while stopping
   let card = document.getElementById('card-' + d.id);
+  const isNew = !card;
   if (!card) {
     card = document.createElement('div');
     card.id = 'card-' + d.id;
     card.className = 'card';
     document.getElementById('grid').appendChild(card);
+    initDrag(card);
+    applyPos(card, d.id);
   }
-
-  // Preserve user-edited fields
-  const castVal = document.getElementById('cast-url-' + d.id)?.value ?? '';
-  const kaUrl = document.getElementById('ka-url-' + d.id)?.value ?? d.keepalive_url;
 
   card.className = 'card ' + d.state;
 
@@ -343,7 +574,11 @@ function upsertCard(d) {
   const isPlaying = d.state === 'playing';
   const kaMode = d.keepalive_mode || 'off';
 
+  // Preserve user-edited fields — single URL field serves both cast and keep-alive
+  const urlVal = document.getElementById('cast-url-' + d.id)?.value ?? (kaMode !== 'off' ? d.keepalive_url : '') ?? '';
+
   card.innerHTML = `
+    <button class="maximize-btn" onclick="openPopover('${esc(d.id)}')" title="Expand">⛶</button>
     <div class="card-inner">
       <div class="device-header">
         <div class="state-dot ${d.state}"></div>
@@ -356,10 +591,14 @@ function upsertCard(d) {
       <div class="artwork-wrap">
         ${d.artwork
           ? `<img class="artwork-img" src="${esc(d.artwork)}" onerror="this.parentNode.innerHTML='<div class=artwork-placeholder>▶</div>'">`
-          : '<div class="artwork-placeholder">▶</div>'}
+          : d.active_url && d.state !== 'idle' && d.state !== 'disconnected'
+            ? `<img class="artwork-img" src="/api/preview?url=${encodeURIComponent(d.active_url)}" onerror="this.parentNode.innerHTML='<div class=artwork-site><div class=site-globe>🌐</div><div class=site-name>${esc(d.app_status || d.app || '')}</div><div class=site-live>● live</div></div>'">`
+            : d.app_status && d.state !== 'idle' && d.state !== 'disconnected'
+              ? `<div class="artwork-site"><div class="site-globe">🌐</div><div class="site-name">${esc(d.app_status)}</div><div class="site-live">● live</div></div>`
+              : '<div class="artwork-placeholder">▶</div>'}
       </div>
 
-      <div class="media-title">${esc(d.title || (d.state === 'idle' ? 'Idle' : d.state === 'disconnected' ? 'Disconnected' : ''))}</div>
+      <div class="media-title">${esc(d.title || d.app_status || (d.state === 'idle' ? 'Idle' : d.state === 'disconnected' ? 'Disconnected' : ''))}</div>
       <div class="media-subtitle">${esc(d.subtitle || '')}</div>
 
       <div class="progress-bar" data-id="${esc(d.id)}" data-duration="${d.duration}" onclick="seekClick(event)">
@@ -374,7 +613,7 @@ function upsertCard(d) {
         <button class="btn" onclick="api('${esc(d.id)}','prev')" title="Previous">⏮</button>
         <button class="btn primary" onclick="api('${esc(d.id)}', isPlaying_${safeId(d.id)} ? 'pause' : 'play')" id="playbtn-${esc(d.id)}">${isPlaying ? '⏸' : '▶'}</button>
         <button class="btn" onclick="api('${esc(d.id)}','next')" title="Next">⏭</button>
-        <button class="btn danger" onclick="api('${esc(d.id)}','stop')" title="Stop">⏹</button>
+        <button class="btn danger" onclick="stopDevice('${esc(d.id)}')" title="Stop">⏹</button>
       </div>
 
       <div class="volume-row">
@@ -385,8 +624,9 @@ function upsertCard(d) {
       </div>
 
       <div class="cast-row">
-        <input id="cast-url-${esc(d.id)}" class="cast-input" type="url" placeholder="Cast URL…" value="${esc(castVal)}">
-        <button class="btn-sm accent" onclick="castURL('${esc(d.id)}')">Cast</button>
+        <input id="cast-url-${esc(d.id)}" class="cast-input" type="url" placeholder="URL…" value="${esc(urlVal)}"
+               onchange="setKeepaliveURL('${esc(d.id)}', this.value)">
+        <button class="btn-sm accent" onclick="castAuto('${esc(d.id)}', this)">Cast</button>
       </div>
 
       <div class="keepalive-row">
@@ -396,14 +636,15 @@ function upsertCard(d) {
           <option value="keepalive"${kaMode==='keepalive'?' selected':''}>Keep-alive</option>
           <option value="force"${kaMode==='force'?' selected':''}>Force</option>
         </select>
-        <input id="ka-url-${esc(d.id)}" class="keepalive-url" type="url" placeholder="URL to maintain…" value="${esc(kaUrl || '')}"
-               onchange="setKeepaliveURL('${esc(d.id)}', this.value)">
       </div>
     </div>
   `;
 
   // Expose isPlaying for the play button onclick
   window['isPlaying_' + safeId(d.id)] = isPlaying;
+
+  // Keep popover in sync
+  if (popoverDeviceId === d.id) renderPopover();
 
   // Start/reset position interpolation
   clearInterval(positionTimers.get(d.id));
@@ -422,12 +663,36 @@ function upsertCard(d) {
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
-function api(id, action, body) {
+function api(id, action, body, feedbackBtn, done) {
+  if (feedbackBtn) feedbackBtn.disabled = true;
   fetch(`/api/devices/${id}/${action}`, {
     method: 'POST',
     headers: body ? {'Content-Type': 'application/json'} : {},
     body: body ? JSON.stringify(body) : undefined,
-  }).catch(console.error);
+  }).then(r => {
+    if (feedbackBtn) {
+      feedbackBtn.disabled = false;
+      const orig = feedbackBtn.textContent;
+      if (r.ok) {
+        feedbackBtn.textContent = '✓';
+        feedbackBtn.style.background = 'var(--green)';
+      } else {
+        feedbackBtn.textContent = '✗';
+        feedbackBtn.style.background = 'var(--red)';
+      }
+      setTimeout(() => {
+        feedbackBtn.textContent = orig;
+        feedbackBtn.style.background = '';
+        if (done) done();
+      }, 2000);
+    } else {
+      if (done) done();
+    }
+  }).catch(err => {
+    console.error(err);
+    if (feedbackBtn) feedbackBtn.disabled = false;
+    if (done) done();
+  });
 }
 
 function seekClick(e) {
@@ -463,15 +728,91 @@ function volumeInput(id, value) {
   volumeDebounce.set(id, t);
 }
 
-function castURL(id) {
+function stopDevice(id) {
+  const card = document.getElementById('card-' + id);
+  const overlay = document.createElement('div');
+  overlay.className = 'card-overlay';
+  overlay.innerHTML = `<div class="overlay-spinner"></div><div class="overlay-msg">Stopping…</div>`;
+  card.appendChild(overlay);
+  stopInFlight.add(id);
+
+  const dismiss = () => {
+    stopInFlight.delete(id);
+    overlay.remove();
+    // Re-render card now that we're no longer blocking updates.
+    const d = devices.get(id);
+    if (d) upsertCard(d);
+  };
+
+  fetch(`/api/devices/${id}/stop`, {method: 'POST'})
+    .then(r => {
+      if (r.ok) {
+        overlay.className = 'card-overlay success';
+        overlay.innerHTML = `<div class="overlay-icon">✓</div><div class="overlay-msg">Stopping…</div>`;
+        // Wait until device reports idle/disconnected, then dismiss.
+        const check = setInterval(() => {
+          const d = devices.get(id);
+          if (!d || d.state === 'idle' || d.state === 'disconnected') {
+            clearInterval(check);
+            clearTimeout(cap);
+            setTimeout(dismiss, 800);
+          }
+        }, 300);
+        // Safety cap — dismiss after 10s regardless.
+        const cap = setTimeout(() => { clearInterval(check); dismiss(); }, 10000);
+      } else {
+        return r.text().then(msg => {
+          overlay.className = 'card-overlay failure';
+          overlay.innerHTML = `<div class="overlay-icon">✗</div><div class="overlay-msg">${esc(msg.trim() || 'Failed')}</div>`;
+          setTimeout(dismiss, 2500);
+        });
+      }
+    }).catch(err => {
+      overlay.className = 'card-overlay failure';
+      overlay.innerHTML = `<div class="overlay-icon">✗</div><div class="overlay-msg">${esc(String(err))}</div>`;
+      setTimeout(dismiss, 2500);
+    });
+}
+
+function castAuto(id, btn) {
   const input = document.getElementById('cast-url-' + id);
   if (!input || !input.value.trim()) return;
-  api(id, 'cast', {url: input.value.trim()});
+  const url = input.value.trim();
+
+  const card = document.getElementById('card-' + id);
+  const overlay = document.createElement('div');
+  overlay.className = 'card-overlay';
+  overlay.innerHTML = `<div class="overlay-spinner"></div><div class="overlay-msg">Casting to device…</div>`;
+  card.appendChild(overlay);
+
+  castInFlight.add(id);
+  fetch(`/api/devices/${id}/cast-auto`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({url}),
+  }).then(r => {
+    if (r.ok) {
+      overlay.className = 'card-overlay success';
+      overlay.innerHTML = `<div class="overlay-icon">✓</div><div class="overlay-msg">Casting started</div>`;
+    } else {
+      return r.text().then(msg => {
+        overlay.className = 'card-overlay failure';
+        overlay.innerHTML = `<div class="overlay-icon">✗</div><div class="overlay-msg">${esc(msg.trim() || 'Failed')}</div>`;
+      });
+    }
+  }).catch(err => {
+    overlay.className = 'card-overlay failure';
+    overlay.innerHTML = `<div class="overlay-icon">✗</div><div class="overlay-msg">${esc(String(err))}</div>`;
+  }).finally(() => {
+    setTimeout(() => {
+      overlay.remove();
+      castInFlight.delete(id);
+    }, 2500);
+  });
 }
 
 function setKeepaliveMode(id, mode) {
-  const urlEl = document.getElementById('ka-url-' + id);
-  const url = urlEl ? urlEl.value.trim() : '';
+  const url = document.getElementById('cast-url-' + id)?.value.trim() ?? '';
   fetch(`/api/devices/${id}/keepalive`, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
@@ -487,6 +828,84 @@ function setKeepaliveURL(id, url) {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({mode: d.keepalive_mode || 'off', url: url.trim()}),
   }).catch(console.error);
+}
+
+// ── Popover ───────────────────────────────────────────────────────────────────
+let popoverDeviceId = null;
+
+function openPopover(id) {
+  popoverDeviceId = id;
+  renderPopover();
+  const pop = document.getElementById('popover');
+  // Reset to center
+  pop.style.left = '';
+  pop.style.top = '';
+  pop.style.transform = '';
+  document.getElementById('popover-backdrop').classList.add('open');
+  // Center via fixed positioning after layout
+  requestAnimationFrame(() => {
+    const r = pop.getBoundingClientRect();
+    pop.style.left = (window.innerWidth / 2 - r.width / 2) + 'px';
+    pop.style.top  = (window.innerHeight / 2 - r.height / 2) + 'px';
+    initPopoverDrag(pop);
+  });
+  document.addEventListener('keydown', popoverKeydown);
+}
+
+function initPopoverDrag(pop) {
+  // Drag by artwork or anywhere that's not a control
+  pop.onmousedown = e => {
+    if (['INPUT','BUTTON','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
+    if (e.target.closest('.progress-bar') || e.target.closest('.volume-row')) return;
+    e.preventDefault();
+    const startX = e.clientX - pop.offsetLeft;
+    const startY = e.clientY - pop.offsetTop;
+    const onMove = e => {
+      const x = Math.max(0, Math.min(window.innerWidth - pop.offsetWidth, e.clientX - startX));
+      const y = Math.max(0, Math.min(window.innerHeight - pop.offsetHeight, e.clientY - startY));
+      pop.style.left = x + 'px';
+      pop.style.top  = y + 'px';
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+}
+
+function renderPopover() {
+  if (!popoverDeviceId) return;
+  const card = document.getElementById('card-' + popoverDeviceId);
+  if (!card) return;
+  const inner = card.querySelector('.card-inner');
+  if (!inner) return;
+  document.getElementById('popover-content').innerHTML = inner.outerHTML;
+
+  // Extract image for blurred background
+  const img = card.querySelector('.artwork-img');
+  const bg = document.getElementById('popover-bg');
+  if (img && img.src && !img.src.endsWith('#')) {
+    bg.style.backgroundImage = `url('${img.src}')`;
+    bg.style.display = '';
+  } else {
+    bg.style.backgroundImage = '';
+    bg.style.display = 'none';
+  }
+}
+
+function closePopover(e) {
+  if (e && e.target !== document.getElementById('popover-backdrop')) return;
+  const pop = document.getElementById('popover');
+  pop.onmousedown = null;
+  document.getElementById('popover-backdrop').classList.remove('open');
+  document.removeEventListener('keydown', popoverKeydown);
+  popoverDeviceId = null;
+}
+
+function popoverKeydown(e) {
+  if (e.key === 'Escape') closePopover();
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

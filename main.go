@@ -22,6 +22,7 @@ var frontendFS embed.FS
 func main() {
 	port := flag.Int("port", 0, "Port to listen on (default 8006, overrides PORT env var)")
 	cfgPath := flag.String("config", "ottermediator.json", "Path to config file")
+	ifaceName := flag.String("iface", "", "Network interface for mDNS discovery (e.g. en0)")
 	flag.Parse()
 
 	// Port resolution: flag > env > default
@@ -52,7 +53,7 @@ func main() {
 	go hub.Run()
 
 	// Create discovery manager and start scanning
-	dm = chromecast.NewDiscoveryManager(cfg, hub)
+	dm = chromecast.NewDiscoveryManager(cfg, hub, *ifaceName)
 	go dm.Start(ctx)
 
 	// HTTP mux

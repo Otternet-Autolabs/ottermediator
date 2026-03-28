@@ -22,6 +22,8 @@ type DeviceStatus struct {
 	Addr          string               `json:"addr"`
 	App           string               `json:"app"`
 	AppIcon       string               `json:"app_icon"`
+	AppStatus     string               `json:"app_status"`
+	ActiveURL     string               `json:"active_url"` // last URL we cast to this device
 	Title         string               `json:"title"`
 	Subtitle      string               `json:"subtitle"`
 	Artwork       string               `json:"artwork"`

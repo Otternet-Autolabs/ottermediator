@@ -19,16 +19,24 @@ type DeviceConfig struct {
 	KeepaliveURL  string        `json:"keepalive_url"`
 }
 
+type KnownDevice struct {
+	Name string `json:"name"`
+	Addr string `json:"addr"`
+	Port int    `json:"port"`
+}
+
 type Config struct {
-	mu      sync.RWMutex            `json:"-"`
-	path    string                  `json:"-"`
-	Devices map[string]DeviceConfig `json:"devices"`
+	mu           sync.RWMutex            `json:"-"`
+	path         string                  `json:"-"`
+	Devices      map[string]DeviceConfig `json:"devices"`
+	KnownDevices map[string]KnownDevice  `json:"known_devices"`
 }
 
 func Load(path string) (*Config, error) {
 	c := &Config{
-		path:    path,
-		Devices: make(map[string]DeviceConfig),
+		path:         path,
+		Devices:      make(map[string]DeviceConfig),
+		KnownDevices: make(map[string]KnownDevice),
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -42,6 +50,9 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Devices == nil {
 		c.Devices = make(map[string]DeviceConfig)
+	}
+	if c.KnownDevices == nil {
+		c.KnownDevices = make(map[string]KnownDevice)
 	}
 	return c, nil
 }
@@ -72,6 +83,23 @@ func (c *Config) GetDevice(id string) DeviceConfig {
 func (c *Config) SetDevice(id string, dc DeviceConfig) error {
 	c.mu.Lock()
 	c.Devices[id] = dc
+	c.mu.Unlock()
+	return c.Save()
+}
+
+func (c *Config) GetKnownDevices() map[string]KnownDevice {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make(map[string]KnownDevice, len(c.KnownDevices))
+	for k, v := range c.KnownDevices {
+		out[k] = v
+	}
+	return out
+}
+
+func (c *Config) SetKnownDevice(id string, kd KnownDevice) error {
+	c.mu.Lock()
+	c.KnownDevices[id] = kd
 	c.mu.Unlock()
 	return c.Save()
 }

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"mime"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -47,6 +49,26 @@ func newDevice(entry castdns.CastEntry, cfg *config.Config, hub Broadcaster) *De
 // Start begins the poll loop for this device.
 func (d *Device) Start() {
 	go d.connectAndPoll()
+}
+
+// UpdateEntry refreshes the network address from a new mDNS record.
+// If the address changed, the current connection is dropped so the poll
+// loop reconnects to the new address immediately.
+func (d *Device) UpdateEntry(entry castdns.CastEntry) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.entry.GetAddr() == entry.GetAddr() && d.entry.GetPort() == entry.GetPort() {
+		return // nothing changed
+	}
+	log.Printf("[%s] address updated %s:%d → %s:%d", d.status.Name,
+		d.entry.GetAddr(), d.entry.GetPort(), entry.GetAddr(), entry.GetPort())
+	d.entry = entry
+	d.status.Addr = entry.GetAddr()
+	// Drop the current app connection so connectAndPoll reconnects to the new address.
+	if d.app != nil {
+		d.app.Close()
+		d.app = nil
+	}
 }
 
 // Shutdown stops the poll loop for this device.
@@ -147,9 +169,11 @@ func (d *Device) poll() bool {
 	if castApp != nil && !castApp.IsIdleScreen {
 		d.status.App = castApp.DisplayName
 		d.status.AppIcon = appIconForID(castApp.AppId)
+		d.status.AppStatus = castApp.StatusText
 	} else {
 		d.status.App = ""
 		d.status.AppIcon = ""
+		d.status.AppStatus = ""
 	}
 
 	if castMedia != nil {
@@ -167,6 +191,15 @@ func (d *Device) poll() bool {
 		} else {
 			d.status.Artwork = ""
 		}
+		log.Printf("[%s] media title=%q subtitle=%q artwork=%q state=%s", d.status.Name, meta.Title, meta.Subtitle, d.status.Artwork, d.status.State)
+	} else if castApp != nil && !castApp.IsIdleScreen {
+		// App is running but no media session (e.g. DashCast showing a web page)
+		d.status.State = StatePlaying
+		d.status.Position = 0
+		d.status.Duration = 0
+		d.status.Title = ""
+		d.status.Subtitle = ""
+		d.status.Artwork = ""
 	} else {
 		d.status.State = StateIdle
 		d.status.Position = 0
@@ -185,16 +218,17 @@ func (d *Device) poll() bool {
 	evaluateKeepalive(d)
 
 	// Broadcast outside the lock to avoid deadlock — copy first
-	go func(snap DeviceStatus) {
+	go func(snap DeviceStatus, activeURL string) {
 		dc := d.cfg.GetDevice(snap.ID)
 		snap.KeepaliveMode = dc.KeepaliveMode
 		snap.KeepaliveURL = dc.KeepaliveURL
+		snap.ActiveURL = activeURL
 		msg, _ := json.Marshal(map[string]interface{}{
 			"type": "devices",
 			"data": []DeviceStatus{snap},
 		})
 		d.hub.Broadcast(msg)
-	}(d.status)
+	}(d.status, d.lastCastURL)
 
 	return true
 }
@@ -237,7 +271,12 @@ func (d *Device) Stop() error {
 	if d.app == nil {
 		return errDisconnected
 	}
-	return d.app.StopMedia()
+	err := d.app.StopMedia()
+	if err == application.ErrNoMediaStop {
+		// No media session (e.g. DashCast) — stop the app itself.
+		return d.app.Stop()
+	}
+	return err
 }
 
 func (d *Device) Seek(position float32) error {
@@ -285,10 +324,29 @@ func (d *Device) Cast(url string) error {
 	if d.app == nil {
 		return errDisconnected
 	}
-	if err := d.app.Load(url, "", false, false); err != nil {
+	// Infer content type from URL extension; default to video/mp4 for extensionless URLs
+	contentType := mime.TypeByExtension(filepath.Ext(url))
+	if contentType == "" {
+		contentType = "video/mp4"
+	}
+	if err := d.app.Load(url, contentType, false, false); err != nil {
 		return err
 	}
 	d.lastCastURL = url
+	return nil
+}
+
+func (d *Device) CastSite(url string) error {
+	d.mu.Lock()
+	addr := d.entry.GetAddr()
+	port := d.entry.GetPort()
+	d.mu.Unlock()
+	if err := castSite(addr, port, url); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	d.lastCastURL = url
+	d.mu.Unlock()
 	return nil
 }
 
