@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OtterMediator</title>
+<style>
+:root {
+  --bg: #0d0d0d;
+  --card: #1a1a1a;
+  --card-idle: #141414;
+  --border: #2a2a2a;
+  --text: #e0e0e0;
+  --subtext: #777;
+  --accent: #4f9cf9;
+  --green: #4caf50;
+  --red: #e05252;
+  --yellow: #f0b429;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; }
+
+#header {
+  background: #111;
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+#header h1 { font-size: 1.1rem; font-weight: 700; color: var(--accent); letter-spacing: 0.02em; }
+#header .subtitle { font-size: 0.75rem; color: var(--subtext); }
+#ws-status { margin-left: auto; font-size: 0.72rem; padding: 0.2rem 0.6rem; border-radius: 10px; font-weight: 600; }
+#ws-status.connected { background: #1a3a1a; color: var(--green); }
+#ws-status.disconnected { background: #3a1a1a; color: var(--red); }
+
+#empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  color: var(--subtext);
+  gap: 0.5rem;
+  text-align: center;
+}
+#empty-state .icon { font-size: 3rem; opacity: 0.3; }
+
+#grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: opacity 0.4s, border-color 0.3s;
+}
+.card.idle, .card.disconnected { opacity: 0.5; }
+.card.playing { border-color: #2a3a2a; }
+
+.card-inner { padding: 1rem; }
+
+/* Device header */
+.device-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.state-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--subtext);
+  flex-shrink: 0;
+}
+.state-dot.playing { background: var(--green); animation: pulse 1.5s infinite; }
+.state-dot.buffering { background: var(--yellow); animation: pulse 0.8s infinite; }
+.state-dot.paused { background: var(--yellow); }
+.state-dot.disconnected { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.2;} }
+
+.app-icon { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
+.device-name { font-weight: 700; font-size: 0.95rem; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-name { font-size: 0.75rem; color: var(--subtext); white-space: nowrap; }
+
+/* Artwork */
+.artwork-wrap {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #0a0a0a;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.artwork-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.artwork-placeholder {
+  color: var(--subtext);
+  font-size: 2.5rem;
+  opacity: 0.2;
+}
+
+/* Media info */
+.media-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.media-subtitle {
+  font-size: 0.8rem;
+  color: var(--subtext);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.5rem;
+}
+
+/* Progress */
+.progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #2a2a2a;
+  border-radius: 2px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  position: relative;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.5s linear;
+  pointer-events: none;
+}
+.time-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--subtext);
+  margin-bottom: 0.6rem;
+}
+
+/* Controls */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.btn {
+  background: #252525;
+  border: none;
+  color: var(--text);
+  padding: 0.4rem 0.65rem;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.15s;
+  line-height: 1;
+}
+.btn:hover { background: #333; }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary:hover { background: #3a85e0; }
+.btn.danger { background: #3a1a1a; color: var(--red); }
+.btn.danger:hover { background: #4a2a2a; }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Volume */
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.85rem;
+}
+.volume-icon { cursor: pointer; user-select: none; font-size: 1rem; }
+input[type=range] {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 4px;
+  cursor: pointer;
+}
+.volume-pct { font-size: 0.72rem; color: var(--subtext); min-width: 28px; text-align: right; }
+
+/* Cast row */
+.cast-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+.cast-input {
+  flex: 1;
+  background: #222;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.35rem 0.5rem;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  outline: none;
+}
+.cast-input:focus { border-color: var(--accent); }
+.btn-sm {
+  background: #252525;
+  border: none;
+  color: var(--text);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.btn-sm:hover { background: #333; }
+.btn-sm.accent { background: var(--accent); color: #fff; }
+
+/* Keep-alive */
+.keepalive-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+}
+.keepalive-label { color: var(--subtext); white-space: nowrap; }
+.keepalive-select {
+  background: #222;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  outline: none;
+  cursor: pointer;
+}
+.keepalive-url {
+  flex: 1;
+  background: #222;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  outline: none;
+  min-width: 0;
+}
+.keepalive-url:focus { border-color: var(--accent); }
+.keepalive-badge {
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.keepalive-badge.keepalive { background: #1a2a3a; color: var(--accent); }
+.keepalive-badge.force { background: #3a1a1a; color: var(--red); }
+</style>
+</head>
+<body>
+<div id="header">
+  <h1>⊙ OtterMediator</h1>
+  <span class="subtitle">Media Cockpit</span>
+  <span id="ws-status" class="disconnected">Connecting…</span>
+</div>
+
+<div id="empty-state">
+  <div class="icon">📡</div>
+  <div>Scanning for Chromecast devices…</div>
+  <div style="font-size:0.8rem;margin-top:0.25rem;">Make sure you're on the same network</div>
+</div>
+
+<div id="grid" style="display:none;"></div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+const devices = new Map(); // id → DeviceStatus
+const positionTimers = new Map(); // id → intervalId
+const volumeDebounce = new Map(); // id → timeoutId
+let ws, reconnectDelay = 1000;
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+function connect() {
+  ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onopen = () => {
+    reconnectDelay = 1000;
+    setWsStatus(true);
+  };
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'devices') {
+      msg.data.forEach(d => {
+        devices.set(d.id, d);
+        upsertCard(d);
+      });
+      updateEmptyState();
+    }
+  };
+  ws.onclose = () => {
+    setWsStatus(false);
+    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+    setTimeout(connect, reconnectDelay);
+  };
+  ws.onerror = () => ws.close();
+}
+
+function setWsStatus(ok) {
+  const el = document.getElementById('ws-status');
+  el.textContent = ok ? 'Connected' : 'Reconnecting…';
+  el.className = ok ? 'connected' : 'disconnected';
+}
+
+function updateEmptyState() {
+  const hasDevices = devices.size > 0;
+  document.getElementById('empty-state').style.display = hasDevices ? 'none' : 'flex';
+  document.getElementById('grid').style.display = hasDevices ? 'grid' : 'none';
+}
+
+// ── Card rendering ────────────────────────────────────────────────────────────
+function upsertCard(d) {
+  let card = document.getElementById('card-' + d.id);
+  if (!card) {
+    card = document.createElement('div');
+    card.id = 'card-' + d.id;
+    card.className = 'card';
+    document.getElementById('grid').appendChild(card);
+  }
+
+  // Preserve user-edited fields
+  const castVal = document.getElementById('cast-url-' + d.id)?.value ?? '';
+  const kaUrl = document.getElementById('ka-url-' + d.id)?.value ?? d.keepalive_url;
+
+  card.className = 'card ' + d.state;
+
+  const pct = d.duration > 0 ? (d.position / d.duration * 100).toFixed(2) : 0;
+  const isPlaying = d.state === 'playing';
+  const kaMode = d.keepalive_mode || 'off';
+
+  card.innerHTML = `
+    <div class="card-inner">
+      <div class="device-header">
+        <div class="state-dot ${d.state}"></div>
+        ${d.app_icon ? `<img class="app-icon" src="${esc(d.app_icon)}" onerror="this.style.display='none'">` : ''}
+        <span class="device-name" title="${esc(d.name)}">${esc(d.name)}</span>
+        ${d.app ? `<span class="app-name">${esc(d.app)}</span>` : ''}
+        ${kaMode !== 'off' ? `<span class="keepalive-badge ${kaMode}">${kaMode === 'force' ? '🔒 force' : '♻ keep-alive'}</span>` : ''}
+      </div>
+
+      <div class="artwork-wrap">
+        ${d.artwork
+          ? `<img class="artwork-img" src="${esc(d.artwork)}" onerror="this.parentNode.innerHTML='<div class=artwork-placeholder>▶</div>'">`
+          : '<div class="artwork-placeholder">▶</div>'}
+      </div>
+
+      <div class="media-title">${esc(d.title || (d.state === 'idle' ? 'Idle' : d.state === 'disconnected' ? 'Disconnected' : ''))}</div>
+      <div class="media-subtitle">${esc(d.subtitle || '')}</div>
+
+      <div class="progress-bar" data-id="${esc(d.id)}" data-duration="${d.duration}" onclick="seekClick(event)">
+        <div class="progress-fill" id="prog-${esc(d.id)}" style="width:${pct}%"></div>
+      </div>
+      <div class="time-row">
+        <span id="pos-${esc(d.id)}">${fmtTime(d.position)}</span>
+        <span>${fmtTime(d.duration)}</span>
+      </div>
+
+      <div class="controls">
+        <button class="btn" onclick="api('${esc(d.id)}','prev')" title="Previous">⏮</button>
+        <button class="btn primary" onclick="api('${esc(d.id)}', isPlaying_${safeId(d.id)} ? 'pause' : 'play')" id="playbtn-${esc(d.id)}">${isPlaying ? '⏸' : '▶'}</button>
+        <button class="btn" onclick="api('${esc(d.id)}','next')" title="Next">⏭</button>
+        <button class="btn danger" onclick="api('${esc(d.id)}','stop')" title="Stop">⏹</button>
+      </div>
+
+      <div class="volume-row">
+        <span class="volume-icon" onclick="toggleMute('${esc(d.id)}',${d.muted})">${d.muted ? '🔇' : '🔊'}</span>
+        <input type="range" min="0" max="1" step="0.01" value="${d.volume}"
+               oninput="volumeInput('${esc(d.id)}', this.value)">
+        <span class="volume-pct">${Math.round(d.volume * 100)}%</span>
+      </div>
+
+      <div class="cast-row">
+        <input id="cast-url-${esc(d.id)}" class="cast-input" type="url" placeholder="Cast URL…" value="${esc(castVal)}">
+        <button class="btn-sm accent" onclick="castURL('${esc(d.id)}')">Cast</button>
+      </div>
+
+      <div class="keepalive-row">
+        <span class="keepalive-label">Keep-alive:</span>
+        <select class="keepalive-select" onchange="setKeepaliveMode('${esc(d.id)}', this.value)">
+          <option value="off"${kaMode==='off'?' selected':''}>Off</option>
+          <option value="keepalive"${kaMode==='keepalive'?' selected':''}>Keep-alive</option>
+          <option value="force"${kaMode==='force'?' selected':''}>Force</option>
+        </select>
+        <input id="ka-url-${esc(d.id)}" class="keepalive-url" type="url" placeholder="URL to maintain…" value="${esc(kaUrl || '')}"
+               onchange="setKeepaliveURL('${esc(d.id)}', this.value)">
+      </div>
+    </div>
+  `;
+
+  // Expose isPlaying for the play button onclick
+  window['isPlaying_' + safeId(d.id)] = isPlaying;
+
+  // Start/reset position interpolation
+  clearInterval(positionTimers.get(d.id));
+  if (isPlaying && d.duration > 0) {
+    let pos = d.position;
+    const timer = setInterval(() => {
+      pos += 1;
+      if (pos > d.duration) { pos = d.duration; clearInterval(timer); }
+      const p = document.getElementById('pos-' + d.id);
+      const f = document.getElementById('prog-' + d.id);
+      if (p) p.textContent = fmtTime(pos);
+      if (f) f.style.width = (pos / d.duration * 100).toFixed(2) + '%';
+    }, 1000);
+    positionTimers.set(d.id, timer);
+  }
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────────
+function api(id, action, body) {
+  fetch(`/api/devices/${id}/${action}`, {
+    method: 'POST',
+    headers: body ? {'Content-Type': 'application/json'} : {},
+    body: body ? JSON.stringify(body) : undefined,
+  }).catch(console.error);
+}
+
+function seekClick(e) {
+  const bar = e.currentTarget;
+  const id = bar.dataset.id;
+  const duration = parseFloat(bar.dataset.duration);
+  if (!duration) return;
+  const pct = e.offsetX / bar.offsetWidth;
+  api(id, 'seek', {position: pct * duration});
+}
+
+function toggleMute(id, currentlyMuted) {
+  const d = devices.get(id);
+  if (!d) return;
+  fetch(`/api/devices/${id}/volume`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({level: d.volume, muted: !currentlyMuted}),
+  }).catch(console.error);
+}
+
+function volumeInput(id, value) {
+  clearTimeout(volumeDebounce.get(id));
+  const t = setTimeout(() => {
+    const d = devices.get(id);
+    if (!d) return;
+    fetch(`/api/devices/${id}/volume`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({level: parseFloat(value), muted: d.muted}),
+    }).catch(console.error);
+  }, 200);
+  volumeDebounce.set(id, t);
+}
+
+function castURL(id) {
+  const input = document.getElementById('cast-url-' + id);
+  if (!input || !input.value.trim()) return;
+  api(id, 'cast', {url: input.value.trim()});
+}
+
+function setKeepaliveMode(id, mode) {
+  const urlEl = document.getElementById('ka-url-' + id);
+  const url = urlEl ? urlEl.value.trim() : '';
+  fetch(`/api/devices/${id}/keepalive`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mode, url}),
+  }).catch(console.error);
+}
+
+function setKeepaliveURL(id, url) {
+  const d = devices.get(id);
+  if (!d) return;
+  fetch(`/api/devices/${id}/keepalive`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mode: d.keepalive_mode || 'off', url: url.trim()}),
+  }).catch(console.error);
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function fmtTime(s) {
+  if (!s || s <= 0) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function safeId(s) {
+  return String(s).replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+connect();
+</script>
+</body>
+</html>
