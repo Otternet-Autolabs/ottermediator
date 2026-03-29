@@ -610,9 +610,9 @@ function upsertCard(d) {
       </div>
 
       <div class="controls">
-        <button class="btn" onclick="api('${esc(d.id)}','prev')" title="Previous">⏮</button>
-        <button class="btn primary" onclick="api('${esc(d.id)}', isPlaying_${safeId(d.id)} ? 'pause' : 'play')" id="playbtn-${esc(d.id)}">${isPlaying ? '⏸' : '▶'}</button>
-        <button class="btn" onclick="api('${esc(d.id)}','next')" title="Next">⏭</button>
+        <button class="btn" onclick="api('${esc(d.id)}','prev',null,this)" title="Previous">⏮</button>
+        <button class="btn primary" onclick="api('${esc(d.id)}', isPlaying_${safeId(d.id)} ? 'pause' : 'play',null,this)" id="playbtn-${esc(d.id)}">${isPlaying ? '⏸' : '▶'}</button>
+        <button class="btn" onclick="api('${esc(d.id)}','next',null,this)" title="Next">⏭</button>
         <button class="btn danger" onclick="stopDevice('${esc(d.id)}')" title="Stop">⏹</button>
       </div>
 

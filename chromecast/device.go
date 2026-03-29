@@ -253,7 +253,11 @@ func (d *Device) Play() error {
 	if d.app == nil {
 		return errDisconnected
 	}
-	return d.app.Unpause()
+	err := d.app.Unpause()
+	if err != nil {
+		log.Printf("[%s] play error: %v", d.status.Name, err)
+	}
+	return err
 }
 
 func (d *Device) Pause() error {
@@ -262,7 +266,11 @@ func (d *Device) Pause() error {
 	if d.app == nil {
 		return errDisconnected
 	}
-	return d.app.Pause()
+	err := d.app.Pause()
+	if err != nil {
+		log.Printf("[%s] pause error: %v", d.status.Name, err)
+	}
+	return err
 }
 
 func (d *Device) Stop() error {
